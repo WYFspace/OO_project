@@ -10,6 +10,7 @@ class Game:
         self.current_player = Board.BLACK
         self.move_history = []
         self.is_over = False
+        self.replay_steps = []
 
     def restart(self):
         self.board = Board(self.board.size)
@@ -56,6 +57,11 @@ class Game:
     def display(self):
         print(f"当前玩家: {self._player_repr(self.current_player)}")
         self.board.display()
+
+    def replay_game(self):
+        for x, y, player in self.move_history:
+            self.board.place_stone(x, y, player)
+            self.display()
 
 class GomokuGame(Game):
     def check_win(self, x, y):
@@ -178,13 +184,22 @@ class GoGame(Game):
         white_score += self.captured_stones[Board.WHITE]
         print(f"黑棋得分（包含提子）：{black_score}")
         print(f"白棋得分（包含提子）：{white_score}")
+        self.is_over = True
         if black_score > white_score:
             print("黑棋胜利！")
+            return 1
         elif white_score > black_score:
             print("白棋胜利！")
+            return 2
         else:
             print("平局！")
-        self.is_over = True
+            return 3
+
+    def check_winner(self):
+        over = self.is_over
+        res = self.calculate_score()
+        self.is_over = over
+        return res
 
     def _count_territory(self):
         visited = set()
@@ -240,3 +255,119 @@ class GoGame(Game):
         print(f"当前玩家: {self._player_repr(self.current_player)}")
         print(f"黑棋提子数：{self.captured_stones[Board.BLACK]}，白棋提子数：{self.captured_stones[Board.WHITE]}")
         self.board.display()
+
+class Reversi(Game):
+    def __init__(self, board_size=8):
+        if board_size != 8:
+            print("黑白棋棋盘大小只能为8*8")
+            board_size = 8
+        super().__init__(board_size)
+        self._initialize_board()
+
+    def _initialize_board(self):
+        mid = self.board.size // 2
+        self.board.grid[mid - 1][mid - 1] = Board.WHITE
+        self.board.grid[mid][mid] = Board.WHITE
+        self.board.grid[mid - 1][mid] = Board.BLACK
+        self.board.grid[mid][mid - 1] = Board.BLACK
+
+    def play_move(self, x, y):
+        if not self._is_valid_move(x, y, self.current_player):
+            raise ValueError("无效的落子位置")
+
+        self._place_and_flip(x, y, self.current_player)
+        self.move_history.append((x, y, self.current_player))
+
+        if not self._has_valid_moves(self._opponent_color(self.current_player)):
+            if not self._has_valid_moves(self.current_player):
+                self.is_over = True
+                self._determine_winner()
+            else:
+                print(f"玩家 {self._player_repr(self.current_player)} 没有合法棋步，轮空！")
+        else:
+            self.switch_player()
+
+    def _is_valid_move(self, x, y, color):
+        if not (0 <= x < self.board.size and 0 <= y < self.board.size) or not self.board.is_empty(x, y):
+            return False
+
+        for dx, dy in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
+            if self._can_capture_in_direction(x, y, dx, dy, color):
+                return True
+        return False
+
+    def _can_capture_in_direction(self, x, y, dx, dy, color):
+        x, y = x + dx, y + dy
+        captured = False
+        while 0 <= x < self.board.size and 0 <= y < self.board.size:
+            if self.board.get_color(x, y) == self._opponent_color(color):
+                captured = True
+            elif self.board.get_color(x, y) == color:
+                return captured
+            else:
+                break
+            x, y = x + dx, y + dy
+        return False
+
+    def _place_and_flip(self, x, y, color):
+        self.board.place_stone(x, y, color)
+        for dx, dy in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
+            if self._can_capture_in_direction(x, y, dx, dy, color):
+                self._flip_in_direction(x, y, dx, dy, color)
+
+    def _flip_in_direction(self, x, y, dx, dy, color):
+        x, y = x + dx, y + dy
+        while 0 <= x < self.board.size and 0 <= y < self.board.size:
+            if self.board.get_color(x, y) == self._opponent_color(color):
+                self.board.grid[y][x] = color
+            elif self.board.get_color(x, y) == color:
+                break
+            x, y = x + dx, y + dy
+
+    def _opponent_color(self, color):
+        return Board.BLACK if color == Board.WHITE else Board.WHITE
+
+    def _has_valid_moves(self, color):
+        for x in range(self.board.size):
+            for y in range(self.board.size):
+                if self._is_valid_move(x, y, color):
+                    return True
+        return False
+
+    def _determine_winner(self):
+        black_count = sum(row.count(Board.BLACK) for row in self.board.grid)
+        white_count = sum(row.count(Board.WHITE) for row in self.board.grid)
+        if black_count > white_count:
+            print("黑棋胜利！")
+        elif white_count > black_count:
+            print("白棋胜利！")
+        else:
+            print("平局！")
+
+    def undo_move(self):
+        if not self.move_history:
+            raise ValueError("没有棋子可悔")
+
+        # 获取最近一步的棋局信息
+        x, y, color = self.move_history.pop()
+
+        # 撤回棋盘上的落子
+        self.board.remove_stone(x, y)
+
+        # 恢复被翻转的棋子
+        for dx, dy in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
+            self._undo_flip_in_direction(x, y, dx, dy, color)
+
+        # 切换回对方玩家
+        self.switch_player()
+
+    def _undo_flip_in_direction(self, x, y, dx, dy, color):
+        # 先找出被翻转的棋子，然后恢复
+        x, y = x + dx, y + dy
+        while 0 <= x < self.board.size and 0 <= y < self.board.size:
+            if self.board.get_color(x, y) == self._opponent_color(color):
+                # 恢复为对方棋子
+                self.board.grid[y][x] = self._opponent_color(color)
+            elif self.board.get_color(x, y) == color:
+                break
+            x, y = x + dx, y + dy

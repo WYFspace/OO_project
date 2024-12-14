@@ -6,7 +6,7 @@ class Client:
         self.show_prompt = True
 
     def start(self):
-        print("欢迎来到五子棋和围棋游戏！")
+        print("欢迎来到五子棋和围棋和黑白棋游戏！")
         while True:
             if self.show_prompt:
                 self.display_prompt()
@@ -26,7 +26,7 @@ class Client:
 
     def display_prompt(self):
         print("\n可用指令：")
-        print("1. start <game_type> <board_size> - 开始游戏，game_type为gomoku或go，board_size为8-19的整数")
+        print("1. start <game_type> <board_size> - 开始游戏，game_type为gomoku或go或reversi，board_size为8-19的整数")
         print("2. move <x> <y> - 在(x, y)位置落子")
         print("   pass - 不落子（仅围棋）")
         print("3. undo - 悔棋一步")
@@ -75,10 +75,12 @@ class Client:
             self.game = GomokuGame(size)
         elif game_type == 'go':
             self.game = GoGame(size)
+        elif game_type == 'reversi':
+            self.game = Reversi(size)
         else:
             print("未知的游戏类型")
             return
-        print(f"游戏开始！棋盘大小为{size}x{size}")
+        print(f"游戏开始！棋盘大小为{self.game.board.size}x{self.game.board.size}")
         self.game.display()
 
     def move(self, args):
@@ -148,6 +150,7 @@ class Client:
 
     def set_prompt(self, args):
         self.show_prompt = True
+
 
 if __name__ == '__main__':
     client = Client()
